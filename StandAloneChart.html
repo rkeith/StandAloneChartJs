@@ -4,7 +4,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Incubators, September 2026</title>
-    <link rel="stylesheet" href="css/shieldui/all.min.css" />
     <style>
         html, body {
             margin: 0;
@@ -13,7 +12,10 @@
             background: #ffffff;
         }
 
+        /* The whole control (toolbar, chart / tables, hint) is at most 1400px wide, centred. */
         .page {
+            max-width: 1400px;
+            margin: 0 auto;
             padding: 16px;
         }
 
@@ -22,19 +24,540 @@
             color: #666;
         }
 
-        #standaloneChart {
+        .chart-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .chart-hint {
+            margin-top: 4px;
+            text-align: center;
+            color: #777;
+            font-size: 13px;
+        }
+
+        .chart-toolbar button {
+            font: inherit;
+            font-size: 13px;
+            padding: 4px 12px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            background: #f7f7f7;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .chart-toolbar button:hover {
+            background: #e9e9e9;
+        }
+
+        .chart-toolbar button:focus-visible {
+            outline: 2px solid #36a2eb;
+            outline-offset: 1px;
+        }
+
+        .chart-toolbar .toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 13px;
+            color: #333;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .chart-toolbar .option-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: #333;
+            margin-right: 8px;
+        }
+
+        .chart-toolbar .option-group label {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            cursor: pointer;
+        }
+
+        .series-style-popup {
+            position: absolute;
+            z-index: 10;
+            width: 270px;
+            box-sizing: border-box;
+            padding: 10px 12px 12px;
+            background: #ffffff;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            font-size: 13px;
+            color: #333;
+        }
+
+        .series-style-popup .popup-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 2px;
+        }
+
+        .series-style-popup .popup-header .plot-number {
+            flex: 1;
+            text-align: center;
+            color: #666;
+        }
+
+        .series-style-popup .plot-name {
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 6px;
+            overflow-wrap: anywhere;
+        }
+
+        .series-style-popup .sample {
+            border-top: 2px solid #000;
+            margin: 0 8px 10px;
+        }
+
+        .series-style-popup .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .series-style-popup input[type=color] {
+            width: 48px;
+            height: 26px;
+            padding: 0 2px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .series-style-popup select {
+            font: inherit;
+            padding: 2px 4px;
+        }
+
+        .series-style-popup .swatches {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+        }
+
+        .series-style-popup .swatch {
+            height: 20px;
+            padding: 0;
+            border: 1px solid rgba(0, 0, 0, 0.25);
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .series-style-popup .swatch.selected {
+            outline: 2px solid #333;
+            outline-offset: 1px;
+        }
+
+        .series-style-popup button.icon {
+            border: none;
+            background: none;
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 6px;
+            color: #555;
+            cursor: pointer;
+        }
+
+        .series-style-popup button.icon:hover {
+            color: #000;
+        }
+
+        .series-style-popup .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .series-style-popup .actions button:not(.icon) {
+            font: inherit;
+            font-size: 12px;
+            padding: 3px 8px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            background: #f7f7f7;
+            cursor: pointer;
+        }
+
+        .series-style-popup .actions .done {
+            margin-left: auto;
+        }
+
+        /* Grid view: controls that only apply to the chart are hidden. */
+        body.view-grid .chart-only {
+            display: none !important;
+        }
+
+        /* ... and controls that only apply to the grid / daily summary are hidden with the chart. */
+        body:not(.view-grid) .table-only {
+            display: none !important;
+        }
+
+        .grid-view {
+            display: flex;
+            flex-direction: column;
+            height: 750px;
+        }
+
+        .grid-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #666;
+            padding: 4px 0 2px;
+        }
+
+        .grid-subtitle {
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            padding-bottom: 8px;
+        }
+
+        /* Scrolls both ways; the heading row and the time column stay in place. */
+        .grid-frame {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            border: 1px solid #ccc;
+        }
+
+        .grid-frame:focus-visible {
+            outline: 2px solid #36a2eb;
+            outline-offset: 1px;
+        }
+
+        .data-grid {
+            border-collapse: separate;    /* keeps cell borders on the sticky heading / column */
+            border-spacing: 0;
+            min-width: 100%;
+            font-size: 13px;
+            color: #333;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .data-grid th,
+        .data-grid td {
+            padding: 4px 10px;
+            text-align: left;
+            border-right: 1px solid #eee;
+            border-bottom: 1px solid #e8e8e8;
+        }
+
+        .data-grid thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f4f4f4;
+            vertical-align: bottom;
+            white-space: normal;          /* headings may wrap */
+            min-width: 60px;
+            border-bottom: 2px solid #bbb;
+        }
+
+        .data-grid .row-head {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            background: #ffffff;
+            white-space: nowrap;
+            border-right: 2px solid #ccc;
+        }
+
+        .data-grid thead th.row-head {
+            z-index: 3;
+            background: #f4f4f4;
+        }
+
+        .data-grid tbody th {
+            font-weight: normal;
+        }
+
+        .data-grid tbody tr:nth-child(even) > * {
+            background: #fafafa;
+        }
+
+        .data-grid tbody tr:hover > * {
+            background: #eaf4fb;
+        }
+
+        .data-grid td.empty {
+            color: #aaa;
+        }
+
+        .data-grid .sample {
+            display: block;
+            width: 28px;
+            margin-bottom: 4px;
+            border-top: 2px solid #000;
+        }
+
+        .data-grid .sample.inline {
+            display: inline-block;
+            width: 24px;
+            margin: 0 8px 0 0;
+            vertical-align: middle;
+        }
+
+        /* Daily summary: compact table; a category row with the date starts each day. */
+        .summary-grid {
+            min-width: 0;
+        }
+
+        .summary-grid th,
+        .summary-grid td {
+            min-width: 90px;
+        }
+
+        .summary-grid thead th {
+            vertical-align: middle;
+        }
+
+        .data-grid tr.category th {
+            background: #e6edf3;
+            color: #222;
+            font-weight: bold;
+            text-align: left;
+            border-top: 1px solid #c9d4de;
+            border-bottom: 1px solid #c9d4de;
+        }
+
+        .data-grid tbody tr.category:hover > * {
+            background: #e6edf3;
+        }
+
+        /* Daily report: the page scrolls (no frame); each day = heading, strip chart, table. */
+        .grid-view.report-mode {
+            height: auto;
+        }
+
+        .report-mode .grid-frame {
+            overflow: visible;
+            border: none;
+        }
+
+        .report-mode .data-grid thead th,
+        .report-mode .data-grid .row-head {
+            position: static;
+        }
+
+        .day-report {
+            margin: 0 0 28px;
+        }
+
+        .day-heading {
+            margin: 6px 0 2px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .day-note {
+            margin: 0 0 4px;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .strip-chart {
+            position: relative;
             width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .strip-chart img.strip-print {
+            display: none;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        #chartContainer {
+            position: relative;
+            width: 100%;
+            height: 750px;
+        }
+
+        #standaloneChart {
+            /* Horizontal drags select a zoom range; vertical swipes still scroll the page on touch devices. */
+            touch-action: pan-y;
+            cursor: crosshair;
+        }
+
+        #chartPrintImage {
+            display: none;
+        }
+
+        @media print {
+            @page {
+                size: landscape;
+                margin: 10mm;
+            }
+
+            .page {
+                max-width: none;
+                padding: 0;
+            }
+
+            #chartStatus,
+            .chart-toolbar,
+            .chart-hint,
+            #chartContainer {
+                display: none !important;
+            }
+
+            #chartPrintImage {
+                display: block;
+                width: 100%;
+                height: auto;
+                max-height: 100vh;
+                object-fit: contain;
+            }
+
+            #chartPrintImage:not([src]) {
+                display: none;
+            }
+
+            /* Grid view prints the whole table (heading row repeats on each page). */
+            .grid-view {
+                height: auto;
+            }
+
+            .grid-frame {
+                overflow: visible;
+                border: none;
+            }
+
+            .data-grid {
+                font-size: 10px;
+            }
+
+            .data-grid th,
+            .data-grid td {
+                padding: 2px 5px;
+            }
+
+            .data-grid thead th,
+            .data-grid .row-head {
+                position: static;
+            }
+
+            .data-grid tbody.day {
+                break-inside: avoid;
+            }
+
+            /* Daily report: charts print as images; a day stays on one page where possible. */
+            .day-report {
+                break-inside: avoid;
+            }
+
+            .strip-chart canvas {
+                display: none !important;
+            }
+
+            .strip-chart {
+                aspect-ratio: auto !important;
+            }
+
+            .strip-chart img.strip-print[src] {
+                display: block;
+                width: 100%;
+                height: auto;
+            }
         }
     </style>
 </head>
 <body>
     <div class="page">
         <div id="chartStatus">Loading chart data...</div>
-        <div id="standaloneChart"></div>
+        <div id="chartToolbar" class="chart-toolbar" hidden>
+            <span class="option-group" role="radiogroup" aria-label="View">
+                View:
+                <label><input type="radio" name="viewMode" value="chart" checked /> Chart</label>
+                <label><input type="radio" name="viewMode" value="grid" /> Grid</label>
+                <label><input type="radio" name="viewMode" value="summary" /> Daily summary</label>
+                <label><input type="radio" name="viewMode" value="report" /> Daily report</label>
+            </span>
+            <label class="toggle chart-only" title="Show the box listing every plot's value at the time under the mouse">
+                <input type="checkbox" id="showValuesInput" checked /> Show values
+            </label>
+            <span class="option-group" role="radiogroup" aria-label="Date and time format">
+                Dates:
+                <label title="Short date and time in your browser's format"><input type="radio" name="dateDisplay" value="locale" checked /> Local</label>
+                <label title="As stored: yyyy-MM-dd HH:mm (ISO 8601)"><input type="radio" name="dateDisplay" value="iso" /> ISO</label>
+            </span>
+            <span class="option-group chart-only" role="radiogroup" aria-label="Zoom direction">
+                Zoom:
+                <label><input type="radio" name="zoomMode" value="x" checked /> Time</label>
+                <label><input type="radio" name="zoomMode" value="y" /> Temperature</label>
+                <label><input type="radio" name="zoomMode" value="xy" /> Both</label>
+            </span>
+            <button type="button" id="resetZoomButton" class="chart-only" hidden>Reset zoom</button>
+            <button type="button" id="lineStylesButton" class="chart-only">Line styles&hellip;</button>
+            <button type="button" id="saveImageButton" class="chart-only">Save image</button>
+            <button type="button" id="savePdfButton" class="table-only" title="A4 report with page numbers">Save PDF</button>
+            <button type="button" id="printButton">Print</button>
+        </div>
+        <div id="chartContainer">
+            <canvas id="standaloneChart" role="img" aria-label="Temperature chart"></canvas>
+
+            <div id="seriesStylePopup" class="series-style-popup" role="dialog" aria-labelledby="seriesStyleName" hidden>
+                <div class="popup-header">
+                    <button type="button" class="icon" id="seriesPrevButton" title="Previous plot" aria-label="Previous plot">&lsaquo;</button>
+                    <span class="plot-number" id="seriesStyleNumber"></span>
+                    <button type="button" class="icon" id="seriesNextButton" title="Next plot" aria-label="Next plot">&rsaquo;</button>
+                    <button type="button" class="icon" id="seriesCloseButton" title="Close" aria-label="Close">&times;</button>
+                </div>
+                <div class="plot-name" id="seriesStyleName"></div>
+                <div class="sample" id="seriesStyleSample"></div>
+                <div class="row">
+                    <label for="seriesColorInput">Color</label>
+                    <input type="color" id="seriesColorInput" />
+                </div>
+                <div class="swatches" id="seriesSwatches"></div>
+                <div class="row">
+                    <label for="seriesWeightInput">Line weight</label>
+                    <select id="seriesWeightInput"></select>
+                </div>
+                <div class="row">
+                    <label for="seriesDashedInput">Dashed</label>
+                    <input type="checkbox" id="seriesDashedInput" />
+                </div>
+                <div class="actions">
+                    <button type="button" id="seriesResetButton" title="Restore this plot's default style">Reset plot</button>
+                    <button type="button" id="seriesResetAllButton" title="Restore the default style of every plot">Reset all</button>
+                    <button type="button" id="seriesDoneButton" class="done">Done</button>
+                </div>
+            </div>
+        </div>
+        <div id="chartHint" class="chart-hint" hidden>Drag on the chart to zoom. Click a legend item to show or hide a plot; right-click a plot line or legend item (or long-press the legend item) to change its line style.</div>
+        <div id="gridView" class="grid-view" hidden>
+            <div class="grid-title" id="gridTitle"></div>
+            <div class="grid-subtitle" id="gridSubtitle"></div>
+            <div class="grid-frame" id="gridFrame" tabindex="0" role="region" aria-labelledby="gridTitle"></div>
+        </div>
+        <img id="chartPrintImage" alt="Temperature chart" />
     </div>
 
-    <script src="js/jquery-3.6.0.min.js"></script>
-    <script src="js/shieldui-all.min.js"></script>
+    <script src="js/chart.umd.min.js"></script>
     <script src="js/standalonechart.js"></script>
 </body>
 </html>
